@@ -1,0 +1,8 @@
+## Interface: 11200
+## Title: Kikilogs1
+## Author: Kikidora
+## Notes: prepares logs for post processing
+## Version: 1.0
+## SavedVariables: kikilogs_data
+
+Kikilogs.lua
