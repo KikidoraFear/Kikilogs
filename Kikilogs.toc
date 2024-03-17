@@ -2,7 +2,7 @@
 ## Title: Kikilogs1
 ## Author: Kikidora
 ## Notes: prepares logs for post processing
-## Version: 1.0
+## Version: 1.1
 ## SavedVariables: kikilogs_data
 
 Kikilogs.lua
