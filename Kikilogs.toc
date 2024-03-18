@@ -2,6 +2,6 @@
 ## Title: Kikilogs1
 ## Author: Kikidora
 ## Notes: prepares logs for post processing
-## Version: 1.2
+## Version: 1.3
 
 Kikilogs.lua
