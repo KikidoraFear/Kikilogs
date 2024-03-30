@@ -3,50 +3,108 @@ local function print(msg)
   DEFAULT_CHAT_FRAME:AddMessage(msg)
 end
 
-local unitIDs = {"player"} -- unitID player
-for i=2,5 do unitIDs[i] = "party"..i-1 end -- unitIDs party
-for i=6,45 do unitIDs[i] = "raid"..i-5 end -- unitIDs raid
-local unitIDs_cache = {} -- init unitIDs_cache[name] = unitID
-local eheal_prev = 0
-
-local function GetUnitID(unitIDs_cache, unitIDs, name)
-  if unitIDs_cache[name] and UnitName(unitIDs_cache[name]) == name then
-      return unitIDs_cache[name]
+local function DeleteTable(t)
+  for k in pairs (t) do
+    t[k] = nil
   end
-  for _,unitID in pairs(unitIDs) do
-      if UnitName(unitID) == name then
-        unitIDs_cache[name] = unitID
-      return unitID
+end
+
+-- Get UnitIDs and Names of Raid/Party
+local player_ids = {"player"} -- unitID player
+for i=2,5 do player_ids[i] = "party"..i-1 end -- unitIDs party
+for i=6,45 do player_ids[i] = "raid"..i-5 end -- unitIDs raid
+
+local pet_ids = {"pet"}
+for i=2,5 do pet_ids[i] = "partypet"..i-1 end -- unitIDs party
+for i=6,45 do pet_ids[i] = "raidpet"..i-5 end -- unitIDs raid
+
+local unit_ids_cache = {} -- init unitIDs_cache[name] = unitID
+
+
+local function GetUnitID(unit_ids_cache, unit_name)
+  if unit_ids_cache[unit_name] and UnitName(unit_ids_cache[unit_name]) == unit_name then
+      return unit_ids_cache[unit_name]
+  end
+  for _,player_id in pairs(player_ids) do
+      if UnitName(player_id) == unit_name then
+        unit_ids_cache[unit_name] = player_id
+        return player_id
       end
   end
-end
-
-local function EHeal(unitIDs_cache, unitIDs, value, target)
-  local unitID = GetUnitID(unitIDs_cache, unitIDs, target)
-  local eheal = 0
-  if unitID then
-    eheal = math.min(UnitHealthMax(unitID) - UnitHealth(unitID), value)
+  for _,pet_id in pairs(pet_ids) do
+    if UnitName(pet_id) == unit_name then
+      unit_ids_cache[unit_name] = pet_id
+      return pet_id
+    end
   end
-  return eheal
 end
 
-local parser = CreateFrame("Frame")
+local function GetUnitName(unit_ids_cache, unit_id)
+  local unit_name = UnitName(unit_id)
+  if unit_name then
+    unit_ids_cache[unit_name] = unit_id
+  end
+  return unit_name
+end
+
+-- calculate EOHeal
+local function EOHeal(unit_ids_cache, value, target)
+  local unit_id = GetUnitID(unit_ids_cache, target)
+  local eheal = 0
+  local oheal = 0
+  if unit_id then
+    eheal = math.min(UnitHealthMax(unit_id) - UnitHealth(unit_id), value)
+    oheal = value-eheal
+  end
+  return eheal, oheal
+end
+
+-- Init Data
+local timer = CreateFrame("Frame")
+local time = GetTime()
+local unit_id_idx = 1
+local players = {}
+local active = false
+timer:SetScript("OnUpdate", function()
+  if active and (GetTime() > time + 1) then
+    local player_name = GetUnitName(unit_ids_cache, player_ids[unit_id_idx])
+    local pet_name = GetUnitName(unit_ids_cache, pet_ids[unit_id_idx])
+    if player_name then
+      if pet_name then
+        players[player_name] = pet_name
+      else
+        players[player_name] = ""
+      end
+    end
+    if unit_id_idx == 1 then
+      Kikilogs_data_players = "" 
+      for key, val in pairs(players) do
+        Kikilogs_data_players = Kikilogs_data_players..key.."#"..val.."$"
+      end
+    end
+    unit_id_idx = math.mod(unit_id_idx,45)+1
+    time = GetTime()
+  end
+end)
+
+
+local event_parser = CreateFrame("Frame")
 -- SPELL HEAL events
-parser:RegisterEvent("CHAT_MSG_SPELL_SELF_BUFF")
-parser:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_SELF_BUFFS")
-parser:RegisterEvent("CHAT_MSG_SPELL_FRIENDLYPLAYER_BUFF")
-parser:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_FRIENDLYPLAYER_BUFFS")
-parser:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF")
-parser:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS")
-parser:RegisterEvent("CHAT_MSG_SPELL_PARTY_BUFF")
-parser:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_PARTY_BUFFS")
+event_parser:RegisterEvent("CHAT_MSG_SPELL_SELF_BUFF")
+event_parser:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_SELF_BUFFS")
+event_parser:RegisterEvent("CHAT_MSG_SPELL_FRIENDLYPLAYER_BUFF")
+event_parser:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_FRIENDLYPLAYER_BUFFS")
+event_parser:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_BUFF")
+event_parser:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_HOSTILEPLAYER_BUFFS")
+event_parser:RegisterEvent("CHAT_MSG_SPELL_PARTY_BUFF")
+event_parser:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_PARTY_BUFFS")
 
 local function MakeGfindReady(template) -- changes global string to fit gfind pattern
   template = gsub(template, "%%s", "(.+)") -- % is escape: %%s = %s raw
   return gsub(template, "%%d", "(%%d+)")
 end
 
-local combatlog_patterns = {} -- parser for combat log, order = {source, attack, target, value, school}, if not presenst = nil; parse order matters!!
+local combatlog_patterns = {} -- event_parser for combat log, order = {source, attack, target, value, school}, if not presenst = nil; parse order matters!!
 -- ####### HEAL SOURCE:ME TARGET:ME
 combatlog_patterns[1] = {string=MakeGfindReady(HEALEDCRITSELFSELF), order={nil, 1, nil, 2, nil}, kind="heal"} -- Your %s critically heals you for %d. (parse before Your %s heals you for %d.)
 combatlog_patterns[2] = {string=MakeGfindReady(HEALEDSELFSELF), order={nil, 1, nil, 2, nil}, kind="heal"} -- Your %s heals you for %d.
@@ -64,33 +122,8 @@ combatlog_patterns[10] = {string=MakeGfindReady(HEALEDCRITOTHEROTHER), order={1,
 combatlog_patterns[11] = {string=MakeGfindReady(HEALEDOTHEROTHER), order={1, 2, 3, 4, nil}, kind="heal"} -- %s's %s heals %s for %d.
 combatlog_patterns[12] = {string=MakeGfindReady(PERIODICAURAHEALOTHEROTHER), order={3, 4, 1, 2, nil}, kind="heal"} -- %s gains %d health from %s's %s.
 
-local HEALEDCRITSELFSELF_s = getglobal("HEALEDCRITSELFSELF")
-local HEALEDSELFSELF_s = getglobal("HEALEDSELFSELF")
-local PERIODICAURAHEALSELFSELF_s = getglobal("PERIODICAURAHEALSELFSELF")
-local HEALEDCRITOTHERSELF_s = getglobal("HEALEDCRITOTHERSELF")
-local HEALEDOTHERSELF_s = getglobal("HEALEDOTHERSELF")
-local PERIODICAURAHEALOTHERSELF_s = getglobal("PERIODICAURAHEALOTHERSELF")
-local HEALEDCRITSELFOTHER_s = getglobal("HEALEDCRITSELFOTHER")
-local HEALEDSELFOTHER_s = getglobal("HEALEDSELFOTHER")
-local PERIODICAURAHEALSELFOTHER_s = getglobal("PERIODICAURAHEALSELFOTHER")
-local HEALEDCRITOTHEROTHER_s = getglobal("HEALEDCRITOTHEROTHER")
-local HEALEDOTHEROTHER_s = getglobal("HEALEDOTHEROTHER")
-local PERIODICAURAHEALOTHEROTHER_s = getglobal("PERIODICAURAHEALOTHEROTHER")
-setglobal("HEALEDCRITSELFSELF", HEALEDCRITSELFSELF_s.."#"..eheal_prev) -- Hack: adds eheal info from previous heal to current heal (this means last heal done wont be counted, but whateves)
-setglobal("HEALEDSELFSELF", HEALEDSELFSELF_s.."#"..eheal_prev)
-setglobal("PERIODICAURAHEALSELFSELF", PERIODICAURAHEALSELFSELF_s.."#"..eheal_prev)
-setglobal("HEALEDCRITOTHERSELF", HEALEDCRITOTHERSELF_s.."#"..eheal_prev)
-setglobal("HEALEDOTHERSELF", HEALEDOTHERSELF_s.."#"..eheal_prev)
-setglobal("PERIODICAURAHEALOTHERSELF", PERIODICAURAHEALOTHERSELF_s.."#"..eheal_prev)
-setglobal("HEALEDCRITSELFOTHER", HEALEDCRITSELFOTHER_s.."#"..eheal_prev)
-setglobal("HEALEDSELFOTHER", HEALEDSELFOTHER_s.."#"..eheal_prev)
-setglobal("PERIODICAURAHEALSELFOTHER", PERIODICAURAHEALSELFOTHER_s.."#"..eheal_prev)
-setglobal("HEALEDCRITOTHEROTHER", HEALEDCRITOTHEROTHER_s.."#"..eheal_prev)
-setglobal("HEALEDOTHEROTHER", HEALEDOTHEROTHER_s.."#"..eheal_prev)
-setglobal("PERIODICAURAHEALOTHEROTHER", PERIODICAURAHEALOTHEROTHER_s.."#"..eheal_prev)
-
-parser:SetScript("OnEvent", function()
-  if arg1 then
+event_parser:SetScript("OnEvent", function()
+  if active and arg1 then
       local pars = {}
       for _,combatlog_pattern in ipairs(combatlog_patterns) do
           for par_1, par_2, par_3, par_4, par_5 in string.gfind(arg1, combatlog_pattern.string) do
@@ -105,22 +138,31 @@ parser:SetScript("OnEvent", function()
                   value = 0
               end
 
-              eheal_prev = EHeal(unitIDs_cache, unitIDs, value, target)
-
-              setglobal("HEALEDCRITSELFSELF", HEALEDCRITSELFSELF_s.."#"..eheal_prev)
-              setglobal("HEALEDSELFSELF", HEALEDSELFSELF_s.."#"..eheal_prev)
-              setglobal("PERIODICAURAHEALSELFSELF", PERIODICAURAHEALSELFSELF_s.."#"..eheal_prev)
-              setglobal("HEALEDCRITOTHERSELF", HEALEDCRITOTHERSELF_s.."#"..eheal_prev)
-              setglobal("HEALEDOTHERSELF", HEALEDOTHERSELF_s.."#"..eheal_prev)
-              setglobal("PERIODICAURAHEALOTHERSELF", PERIODICAURAHEALOTHERSELF_s.."#"..eheal_prev)
-              setglobal("HEALEDCRITSELFOTHER", HEALEDCRITSELFOTHER_s.."#"..eheal_prev)
-              setglobal("HEALEDSELFOTHER", HEALEDSELFOTHER_s.."#"..eheal_prev)
-              setglobal("PERIODICAURAHEALSELFOTHER", PERIODICAURAHEALSELFOTHER_s.."#"..eheal_prev)
-              setglobal("HEALEDCRITOTHEROTHER", HEALEDCRITOTHEROTHER_s.."#"..eheal_prev)
-              setglobal("HEALEDOTHEROTHER", HEALEDOTHEROTHER_s.."#"..eheal_prev)
-              setglobal("PERIODICAURAHEALOTHEROTHER", PERIODICAURAHEALOTHEROTHER_s.."#"..eheal_prev)
+              local eheal, oheal = EOHeal(unit_ids_cache, value, target)
+              if eheal and oheal then
+                Kikilogs_data_heal = Kikilogs_data_heal..GetTime().."#"..arg1.."#"..eheal.."#"..oheal.."$"
+              end
               return
           end
       end
   end
 end)
+
+
+SLASH_KIKILOGS1 = "/kikilogs"
+SlashCmdList["KIKILOGS"] = function(msg)
+  local _, _, cmd = string.find(msg, "%s?(.*)")
+  if (msg == "" or msg == nil) then
+    if active then
+      active = false
+      print("Kikilogs deactivated (reset with /kikilogs reset)")
+    else
+      active = true
+      print("Kikilogs activated (reset with /kikilogs reset)")
+    end
+  elseif msg=="reset" then
+    Kikilogs_data_heal = ""
+    Kikilogs_data_players = ""
+    DeleteTable(players)
+  end
+end

@@ -1,7 +1,8 @@
 ## Interface: 11200
-## Title: Kikilogs1
+## Title: Kikilogs2
 ## Author: Kikidora
-## Notes: prepares logs for post processing
-## Version: 1.3
+## Notes: adds missing combatlog data to SavedVariables for post processing
+## Version: 2.0
+## SavedVariables: Kikilogs_data_heal, Kikilogs_data_players
 
 Kikilogs.lua
