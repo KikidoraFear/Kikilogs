@@ -2,7 +2,7 @@
 ## Title: Kikilogs2
 ## Author: Kikidora
 ## Notes: adds missing combatlog data to SavedVariables for post processing
-## Version: 2.1
+## Version: 2.2
 ## SavedVariables: Kikilogs_data_heal, Kikilogs_data_players
 
 Kikilogs.lua

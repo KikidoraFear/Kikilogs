@@ -68,18 +68,17 @@ local active = false
 timer:SetScript("OnUpdate", function()
   if active and (GetTime() > time + 1) then
     local player_name = GetUnitName(unit_ids_cache, player_ids[unit_id_idx])
-    local pet_name = GetUnitName(unit_ids_cache, pet_ids[unit_id_idx])
+    local _, player_class = UnitClass(player_ids[unit_id_idx])
+    local pet_name = GetUnitName(unit_ids_cache, pet_ids[unit_id_idx]) or ""
     if player_name then
-      if pet_name then
-        players[player_name] = pet_name
-      else
-        players[player_name] = ""
-      end
+      players[player_name] = {}
+      players[player_name]["class"] = player_class
+      players[player_name]["pet"] = pet_name
     end
     if unit_id_idx == 1 then
-      Kikilogs_data_players = "" 
-      for key, val in pairs(players) do
-        Kikilogs_data_players = Kikilogs_data_players..key.."#"..val.."$"
+      Kikilogs_data_players = ""
+      for player_name, player_info in pairs(players) do
+        Kikilogs_data_players = Kikilogs_data_players..player_name.."#"..player_info["class"].."#"..player_info["pet"].."$"
       end
     end
     unit_id_idx = math.mod(unit_id_idx,45)+1
@@ -151,7 +150,6 @@ end)
 
 SLASH_KIKILOGS1 = "/kikilogs"
 SlashCmdList["KIKILOGS"] = function(msg)
-  local _, _, cmd = string.find(msg, "%s?(.*)")
   if (msg == "" or msg == nil) then
     if active then
       active = false
