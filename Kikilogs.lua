@@ -73,12 +73,16 @@ timer:SetScript("OnUpdate", function()
     if player_name then
       players[player_name] = {}
       players[player_name]["class"] = player_class
-      players[player_name]["pet"] = pet_name
+      if pet_name then -- so that if pet is released it doesnt get overwritten with nothing
+        players[player_name]["pet"] = pet_name
+      end
     end
     if unit_id_idx == 1 then
       Kikilogs_data_players = ""
       for player_name, player_info in pairs(players) do
-        Kikilogs_data_players = Kikilogs_data_players..player_name.."#"..player_info["class"].."#"..player_info["pet"].."$"
+        local class = player_info["class"] or ""
+        local pet = player_info["pet"] or ""
+        Kikilogs_data_players = Kikilogs_data_players..player_name.."#"..class.."#"..pet.."$"
       end
     end
     unit_id_idx = math.mod(unit_id_idx,45)+1
