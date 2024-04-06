@@ -151,19 +151,6 @@ event_parser:SetScript("OnEvent", function()
   end
 end)
 
-local combat_status = CreateFrame("Frame")
-local incombat = UnitAffectingCombat("player")
-combat_status:RegisterEvent("PLAYER_REGEN_DISABLED")
-combat_status:RegisterEvent("PLAYER_REGEN_ENABLED")
-combat_status:SetScript("OnEvent", function()
-  if incombat and (event=="PLAYER_REGEN_ENABLED") then
-    Kikilogs_data_incombat = Kikilogs_data_incombat..GetTime().."#i$"
-  elseif (not incombat) and (event=="PLAYER_REGEN_DISABLED") then
-    Kikilogs_data_incombat = Kikilogs_data_incombat..GetTime().."#o$"
-  end
-  incombat = (event=="PLAYER_REGEN_DISABLED")
-end)
-
 
 SLASH_KIKILOGS1 = "/kikilogs"
 SlashCmdList["KIKILOGS"] = function(msg)
@@ -178,7 +165,6 @@ SlashCmdList["KIKILOGS"] = function(msg)
   elseif msg=="reset" then
     Kikilogs_data_heal = ""
     Kikilogs_data_players = ""
-    Kikilogs_data_incombat = ""
     DeleteTable(players)
     print("Kikilogs has been reset")
   end
