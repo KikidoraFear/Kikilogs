@@ -3,6 +3,14 @@ local function print(msg)
   DEFAULT_CHAT_FRAME:AddMessage(msg)
 end
 
+
+local addon_loader = CreateFrame("Frame")
+addon_loader:RegisterEvent("ADDON_LOADED")
+addon_loader:SetScript("OnEvent", function()
+  Kikilogs_data_heal = Kikilogs_data_heal or ""
+end)
+
+
 local function DeleteTable(t)
   for k in pairs (t) do
     t[k] = nil
