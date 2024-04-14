@@ -3,52 +3,27 @@ local function print(msg)
   DEFAULT_CHAT_FRAME:AddMessage(msg)
 end
 
+
+local addon_loader = CreateFrame("Frame")
+addon_loader:RegisterEvent("ADDON_LOADED")
+addon_loader:SetScript("OnEvent", function()
+  Kikilogs_data_heal = Kikilogs_data_heal or ""
+end)
+
+
 local function DeleteTable(t)
-  if t then
-    for k in pairs (t) do
-      t[k] = nil
-    end
+  for k in pairs (t) do
+    t[k] = nil
   end
 end
 
-local function GetUnitName(unit_ids_cache, unit_id)
-  local unit_name = UnitName(unit_id)
-  if unit_name then
-    unit_ids_cache[unit_name] = unit_id
-  end
-  return unit_name
-end
-
-
--- Get UnitIDs and Names of Raid/Party
 local player_ids = {"player"} -- unitID player
 for i=2,5 do player_ids[i] = "party"..i-1 end -- unitIDs party
 for i=6,45 do player_ids[i] = "raid"..i-5 end -- unitIDs raid
-
 local pet_ids = {"pet"}
 for i=2,5 do pet_ids[i] = "partypet"..i-1 end -- unitIDs party
 for i=6,45 do pet_ids[i] = "raidpet"..i-5 end -- unitIDs raid
-local unit_ids_cache = {} -- init unitIDs_cache[name] = unitID
-
-local function AddPlayersFromRaid()
-  for idx, player_id in ipairs(player_ids) do
-    local pet_id = pet_ids[idx]
-    local player_name = GetUnitName(unit_ids_cache, player_id)
-    local _, player_class = UnitClass(player_id)
-    local pet_name = GetUnitName(unit_ids_cache, pet_id)
-    if player_name and player_class then
-      if not Kikilogs_data_players_table[player_name] then
-        Kikilogs_data_players_table[player_name] = {}
-        Kikilogs_data_players_table[player_name]["class"] = player_class -- class won't change
-      end
-      if pet_name then
-        Kikilogs_data_players_table[player_name]["pet"] = pet_name -- pet might change
-      end
-    end
-  end
-end
-
-local function GetUnitID(unit_name)
+local function GetUnitID(unit_ids_cache, unit_name)
   if unit_ids_cache[unit_name] and UnitName(unit_ids_cache[unit_name]) == unit_name then
       return unit_ids_cache[unit_name]
   end
@@ -66,9 +41,17 @@ local function GetUnitID(unit_name)
   end
 end
 
+local function GetUnitName(unit_ids_cache, unit_id)
+  local unit_name = UnitName(unit_id)
+  if unit_name then
+    unit_ids_cache[unit_name] = unit_id
+  end
+  return unit_name
+end
+
 -- calculate EOHeal
-local function EOHeal(value, target)
-  local unit_id = GetUnitID(target)
+local function EOHeal(unit_ids_cache, value, target)
+  local unit_id = GetUnitID(unit_ids_cache, target)
   local eheal = 0
   local oheal = 0
   if unit_id then
@@ -78,32 +61,39 @@ local function EOHeal(value, target)
   return eheal, oheal
 end
 
+-- Get UnitIDs and Names of Raid/Party
+local unit_ids_cache = {} -- init unitIDs_cache[name] = unitID
+
+
 -- Init Data
-local addon_loader = CreateFrame("Frame")
-addon_loader:RegisterEvent("ADDON_LOADED")
-addon_loader:RegisterEvent("PLAYER_LOGOUT")
-addon_loader:SetScript("OnEvent", function()
-  if event=="ADDON_LOADED" then
-    Kikilogs_data_heal = Kikilogs_data_heal or ""
-    Kikilogs_data_players_table = Kikilogs_data_players_table or {}
-  elseif event=="PLAYER_LOGOUT" then
-    Kikilogs_data_players = ""
-    for player_name, player_info in pairs(Kikilogs_data_players_table) do
-      local class = player_info["class"] or ""
-      local pet = player_info["pet"] or ""
-      Kikilogs_data_players = Kikilogs_data_players..player_name.."#"..class.."#"..pet.."$"
-    end
-  end
-end)
-
-
+local timer = CreateFrame("Frame")
+local time = GetTime()
+local unit_id_idx = 1
+local players = {}
 local active = false
-
-local party_members_changed = CreateFrame("Frame") -- should fire when players are moved around in raids as well
-party_members_changed:RegisterEvent("PARTY_MEMBERS_CHANGED")
-party_members_changed:RegisterEvent("UNIT_PET")
-party_members_changed:SetScript("OnEvent", function()
-  AddPlayersFromRaid()
+timer:SetScript("OnUpdate", function()
+  if active and (GetTime() > time + 1) then
+    local player_name = GetUnitName(unit_ids_cache, player_ids[unit_id_idx])
+    local _, player_class = UnitClass(player_ids[unit_id_idx])
+    local pet_name = GetUnitName(unit_ids_cache, pet_ids[unit_id_idx]) or ""
+    if player_name then
+      players[player_name] = {}
+      players[player_name]["class"] = player_class
+      if pet_name then -- so that if pet is released it doesnt get overwritten with nothing
+        players[player_name]["pet"] = pet_name
+      end
+    end
+    if unit_id_idx == 1 then
+      Kikilogs_data_players = ""
+      for player_name, player_info in pairs(players) do
+        local class = player_info["class"] or ""
+        local pet = player_info["pet"] or ""
+        Kikilogs_data_players = Kikilogs_data_players..player_name.."#"..class.."#"..pet.."$"
+      end
+    end
+    unit_id_idx = math.mod(unit_id_idx,45)+1
+    time = GetTime()
+  end
 end)
 
 
@@ -157,7 +147,7 @@ event_parser:SetScript("OnEvent", function()
                   value = 0
               end
 
-              local eheal, oheal = EOHeal(value, target)
+              local eheal, oheal = EOHeal(unit_ids_cache, value, target)
               if eheal and oheal then
                 Kikilogs_data_heal = Kikilogs_data_heal..GetTime().."#"..arg1.."#"..eheal.."#"..oheal.."$"
               end
@@ -177,7 +167,6 @@ SlashCmdList["KIKILOGS"] = function(msg)
     else
       active = true
       print("Kikilogs activated (reset with /kikilogs reset)")
-      AddPlayersFromRaid()
     end
   elseif msg=="reset" then
     Kikilogs_data_heal = ""
