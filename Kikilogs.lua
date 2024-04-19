@@ -182,7 +182,7 @@ SlashCmdList["KIKILOGS"] = function(msg)
   elseif msg=="reset" then
     Kikilogs_data_heal = ""
     Kikilogs_data_players = ""
-    DeleteTable(players)
+    DeleteTable(Kikilogs_data_players_table)
     print("Kikilogs has been reset")
   end
 end
