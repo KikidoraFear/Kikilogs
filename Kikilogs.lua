@@ -41,7 +41,7 @@ local function AddPlayersFromRaid()
         Kikilogs_data_players_table[player_name] = {}
         Kikilogs_data_players_table[player_name]["class"] = player_class -- class won't change
       end
-      if pet_name then
+      if pet_name and (pet_name ~= "Unknown") then
         Kikilogs_data_players_table[player_name]["pet"] = pet_name -- pet might change
       end
     end
